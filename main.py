@@ -10,10 +10,15 @@ from vlogging import VisualRecord
 import logging
 
 # Global Parameters
-cam_num = 4
-seq_num = 10
+cam_num = 5
+seq_num = 16
 param_FAST = 20
 rad_circular_sampling = 10
+unit_square_size = 250 # mm
+horizontal_unit_num = 5
+vertical_unit_num = 3
+scale_factor = 0.6
+imageSize = (1920, 1080)
 
 def circle_check1(img_thresh, _kp, rad):
 
@@ -56,15 +61,20 @@ def circle_check2(img_thresh, _kp, rad):
     return flag
 
 
-def circular_sampling(img, kp, rad):
+def circular_sampling(src_img, kp, rad):
+    img = src_img.copy()
     img_gray = cv2.cvtColor(img, cv2.cv.CV_RGB2GRAY)
     ret, img_thresh = cv2.threshold(img_gray,100,255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
     #cv2.imshow("img_thresh", img_thresh)
 
     pattern_features = []
     for _kp in kp:
-        if circle_check1(img_thresh, _kp, rad) or circle_check2(img_thresh, _kp, rad):
-            pattern_features.append(_kp)
+        cx = _kp.pt[0]
+        cy = _kp.pt[1]
+
+        if cy + rad < img_thresh.shape[0] and cx + rad < img_thresh.shape[1] and cy - rad > 0 and cx - rad > 0:
+            if circle_check1(img_thresh, _kp, rad) or circle_check2(img_thresh, _kp, rad):
+                pattern_features.append(_kp)
 
     def distance(a,b):
         ax = a.pt[0]
@@ -87,36 +97,158 @@ def circular_sampling(img, kp, rad):
             new_pattern_features.append(pf1)
 
     # print pattern_features
-    for pf in new_pattern_features:
-        cv2.circle(img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
-
-    cv2.imshow("pattern_features", img)
+    # for pf in new_pattern_features:
+    #     cv2.circle(img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
+    # cv2.imshow("pattern_features", img)
+    # cv2.waitKey()
 
     return new_pattern_features
 
+def homography_estimation(src_img, pattern_features):
+    #img = src_img.copy()
+    img_gray = cv2.cvtColor(img, cv2.cv.CV_RGB2GRAY)
+
+    ideal_pattern_features = []
+    pract_pattern_features = []
+
+    for pf in pattern_features:
+        pract_pattern_features.append(pf.pt)
+    pract_pattern_features = np.array(pract_pattern_features)
+
+    for j in range(0,horizontal_unit_num+1):
+        for i in range(0,vertical_unit_num+1):
+            ideal_pattern_features.append((unit_square_size * j, unit_square_size * i))
+    ideal_pattern_features = np.array(ideal_pattern_features )
+    ret_ideal_pattern_features = ideal_pattern_features
+
+    ideal_pattern_cetner = np.mean(ideal_pattern_features, axis=0)
+    pract_pattern_cetner = np.mean(pract_pattern_features, axis=0)
+
+    ideal_pattern_features = np.array(ideal_pattern_features) * scale_factor
+    ideal_pattern_features = ideal_pattern_features + (np.mean(pract_pattern_features, axis=0) - np.mean(ideal_pattern_features, axis=0))
+
+    def distance(a,b):
+        ax = a[0]
+        ay = a[1]
+        bx = b[0]
+        by = b[1]
+
+        return math.sqrt((ax-bx)**2 + (ay-by)**2)
+
+    ideal_pattern_corr = []
+    pract_pattern_corr = []
+    dist = np.zeros((len(ideal_pattern_features),1))
+
+    for ppf in pract_pattern_features:
+        pract_pattern_corr.append(ppf)
+
+        i=0
+        for ipf in ideal_pattern_features:
+            dist[i] = distance(ppf, ipf)
+            i = i+1
+
+        ideal_pattern_corr.append(ideal_pattern_features[np.argmin(dist)])
+
+
+    ideal_pattern_corr = np.array(ideal_pattern_corr)
+    pract_pattern_corr = np.array(pract_pattern_corr)
+    H =  cv2.findHomography(ideal_pattern_corr, pract_pattern_corr)[0]
+
+    ideal_pattern_features = np.append(ideal_pattern_features, np.ones((len(ideal_pattern_features),1)),axis=1)
+    ideal_pattern_features = np.dot(H,ideal_pattern_features.T).T
+    for i in range(len(ideal_pattern_features)):
+        ideal_pattern_features[i] = ideal_pattern_features[i]/ideal_pattern_features[i][2]
+    ideal_pattern_features = ideal_pattern_features[:,0:2]
+
+    #ret, corners = cv2.findChessboardCorners(img_gray, (6,4),None)
+    # corners = np.zeros(24)
+    # i = 0
+    # for k in ideal_pattern_corr:
+    #     corners[i] = (list[( list([k[0], k[1]])]))
+    #     #corners[i] = list(np.array(list(np.array(list([k[0], k[1]])))))
+
+    # term = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_COUNT, 30, 0.1)
+    # cv2.cornerSubPix(img_gray, ideal_pattern_corr, (11,11), (-1,-1), term)
+    # cv2.drawChessboardCorners(img, (vertical_unit_num+1, horizontal_unit_num+1), ideal_pattern_corr, 1)
+
+    # print pattern_features
+    i=0
+    for pf in ideal_pattern_features:
+        cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (0,255,0), 3)
+        cv2.putText(img, str(i),(int(pf[0]), int(pf[1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0))
+        i = i+1
+    i=0
+    # for pf in pract_pattern_features:
+    #     cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (255,0,0), 3)
+    #     cv2.putText(img, str(i),(int(pf[0]), int(pf[1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0))
+    #     i = i+1
+    # cv2.imshow("pattern_features", img)
+
+    return ideal_pattern_features, ret_ideal_pattern_features
+
 
 # main
-logger = logging.getLogger("demo")
-fh = FileHandler('log.html',mode="w")
-logger.setLevel(logging.DEBUG)
-logger.addHandler(fh)
+# logger = logging.getLogger("demo")
+# fh = FileHandler('log.html',mode="w")
+# logger.setLevel(logging.DEBUG)
+# logger.addHandler(fh)
+# #logger.debug(VisualRecord("img_corners", img_corners,"image corners", fmt="png"))
 
-#logger.debug(VisualRecord("img_corners", img_corners,"image corners", fmt="png"))
+for j in range(1,cam_num+1):
+    object_points = np.zeros((seq_num*6*4, 3), dtype=np.float32)
+    image_points = np.zeros((seq_num*6*4, 2), dtype=np.float32)
 
-for i in range(1,seq_num+1):
-    filename = "seq/20150805/cam%d/IND000%d%02d.bmp" % (cam_num+1, cam_num ,i)
+    for i in range(0,seq_num):
+        filename = "seq/20150805/cam%d/IND000%d%02d.bmp" % (j, j-1, i)
+        img = cv2.imread(filename)
 
-    img = cv2.imread(filename)
-    img_gray = cv2.imread(filename,0)
+        # Initiate FAST object with default values
+        fast = cv2.FastFeatureDetector(param_FAST)
+        key_points = fast.detect(img,None)
+        # img_corners = cv2.drawKeypoints(img, key_points, color=(255,0,0))
+        # cv2.imshow("img_corners", img_corners)
 
-    # Initiate FAST object with default values
-    fast = cv2.FastFeatureDetector(param_FAST)
+        pattern_features = circular_sampling(img, key_points, rad_circular_sampling)
+        result_pattern_features, ret = homography_estimation(img, pattern_features)
 
-    # find and draw the keypoints
-    kp = fast.detect(img,None)
-    img_corners = cv2.drawKeypoints(img, kp, color=(255,0,0))
-    #cv2.imshow("img_corners", img_corners)
+        image_points[i*24:(i+1)*24,0:2] = result_pattern_features
+        object_points[i*24:(i+1)*24,0:2] = ret
 
-    circular_sampling(img, kp, rad_circular_sampling)
+        #cv2.imwrite("result/cam%d-%02d.bmp" % (j,i), img)
+        #cv2.waitKey()
 
-    cv2.waitKey()
+    # camera_matrix = np.zeros((3,3),'float32')
+    # camera_matrix[0,0]= 1736.0
+    # camera_matrix[1,1]= 1736.0
+    # camera_matrix[2,2]= 1.0
+    #
+    # camera_matrix[0,2]= 981.0
+    # camera_matrix[1,2]= 526.0
+    #
+    # dist_coefs = np.zeros(4,'float32')
+
+    #rms,camera_matrix,dist_coefs,rvecs,tvecs = cv2.calibrateCamera([object_points],[image_points], imageSize, camera_matrix,dist_coefs,flags=cv2.CALIB_USE_INTRINSIC_GUESS)
+    rms,camera_matrix,dist_coefs,rvecs,tvecs = cv2.calibrateCamera([object_points],[image_points], imageSize, None, None)
+    rmat = cv2.Rodrigues(np.array(rvecs))[0]
+    tvec = tvecs[0]
+
+    print camera_matrix, rms
+
+    fp=open("result/cam%d_param.txt" % j, 'w')
+    for i in range(0,3):
+        for j in range(0,3):
+            fp.write(str(camera_matrix[i][j]))
+            fp.write(" ")
+        fp.write("\n")
+    fp.write("\n")
+
+    for i in range(0,3):
+        for j in range(0,3):
+            fp.write(str(rmat[i][j]))
+            fp.write(" ")
+        fp.write("\n")
+    fp.write("\n")
+    for j in range(0,3):
+        fp.write(str(tvec[j][0]))
+        fp.write(" ")
+    fp.write("\n")
