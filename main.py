@@ -11,7 +11,7 @@ import logging
 
 # Global Parameters
 cam_num = 5
-seq_num = 16
+seq_num = 10
 param_FAST = 20
 rad_circular_sampling = 10
 unit_square_size = 250 # mm
@@ -106,7 +106,7 @@ def circular_sampling(src_img, kp, rad):
 
 def homography_estimation(src_img, pattern_features):
     #img = src_img.copy()
-    img_gray = cv2.cvtColor(img, cv2.cv.CV_RGB2GRAY)
+    img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
     ideal_pattern_features = []
     pract_pattern_features = []
@@ -174,7 +174,7 @@ def homography_estimation(src_img, pattern_features):
     # print pattern_features
     i=0
     for pf in ideal_pattern_features:
-        cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (0,255,0), 3)
+        cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (0,255,0), 1)
         cv2.putText(img, str(i),(int(pf[0]), int(pf[1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0))
         i = i+1
     i=0
@@ -195,12 +195,25 @@ def homography_estimation(src_img, pattern_features):
 # #logger.debug(VisualRecord("img_corners", img_corners,"image corners", fmt="png"))
 
 for j in range(1,cam_num+1):
-    object_points = np.zeros((seq_num*6*4, 3), dtype=np.float32)
-    image_points = np.zeros((seq_num*6*4, 2), dtype=np.float32)
+    # object_points = np.zeros((seq_num*6*4, 3), dtype=np.float32)
+    # image_points = np.zeros((seq_num*6*4, 2), dtype=np.float32)
+
+    pattern_size = (4, 6)
+    pattern_points = np.zeros( (24, 3), np.float32 )
+    #pattern_points = pattern_points*250
+    for a in range(0,6):
+        for b in range(0,4):
+            pattern_points[a*4+b][0] = a*250
+            pattern_points[a*4+b][1] = b*250
+            pattern_points[a*4+b][2] = 0
+
+    object_points = []
+    image_points = []
 
     for i in range(0,seq_num):
         filename = "seq/20150805/cam%d/IND000%d%02d.bmp" % (j, j-1, i)
         img = cv2.imread(filename)
+        img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
         # Initiate FAST object with default values
         fast = cv2.FastFeatureDetector(param_FAST)
@@ -211,10 +224,33 @@ for j in range(1,cam_num+1):
         pattern_features = circular_sampling(img, key_points, rad_circular_sampling)
         result_pattern_features, ret = homography_estimation(img, pattern_features)
 
-        image_points[i*24:(i+1)*24,0:2] = result_pattern_features
-        object_points[i*24:(i+1)*24,0:2] = ret
+        ret2, corners = cv2.findChessboardCorners(img_gray, (4,6))
 
-        #cv2.imwrite("result/cam%d-%02d.bmp" % (j,i), img)
+        idx=0
+        for corner in corners:
+            corner[0][0] = result_pattern_features[idx][0]
+            corner[0][1] = result_pattern_features[idx][1]
+            idx = idx+1
+
+        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
+        cv2.cornerSubPix(img_gray, corners ,(10,10), (-1,-1), criteria)
+        # img_gray = cv2.drawChessboardCorners(img_gray, (4,6), corners,ret)
+
+        idx = 0
+        for corner in corners:
+            cv2.circle(img, (corner[0][0], corner[0][1]), 3, (0,0,255), 3)
+            cv2.putText(img, str(idx),(corner[0][0], corner[0][1]),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255))
+            idx = idx+1
+            #print (corner[0][0], corner[0][1])
+
+        #image_points[i*24:(i+1)*24,0:2] = result_pattern_features
+        #object_points[i*24:(i+1)*24,0:2] = ret
+
+        image_points.append(corners.reshape(-1, 2))
+        object_points.append(pattern_points)
+
+        cv2.imwrite("result/cam%d-%02d.bmp" % (j,i), img)
+        #cv2.imwrite("result/cam%d-%02d_gray.bmp" % (j,i), img_gray)
         #cv2.waitKey()
 
     # camera_matrix = np.zeros((3,3),'float32')
@@ -227,10 +263,13 @@ for j in range(1,cam_num+1):
     #
     # dist_coefs = np.zeros(4,'float32')
 
+    #image_points = np.array(image_points)
+    #object_points = np.array(object_points)
+
     #rms,camera_matrix,dist_coefs,rvecs,tvecs = cv2.calibrateCamera([object_points],[image_points], imageSize, camera_matrix,dist_coefs,flags=cv2.CALIB_USE_INTRINSIC_GUESS)
-    rms,camera_matrix,dist_coefs,rvecs,tvecs = cv2.calibrateCamera([object_points],[image_points], imageSize, None, None)
-    rmat = cv2.Rodrigues(np.array(rvecs))[0]
-    tvec = tvecs[0]
+    rms,camera_matrix,dist_coefs,rvecs,tvecs = cv2.calibrateCamera(object_points,image_points,imageSize)
+    rmat = cv2.Rodrigues(rvecs[9])[0]
+    tvec = tvecs[9]
 
     print camera_matrix, rms
 
