@@ -194,7 +194,7 @@ def homography_estimation(src_img, pattern_features):
 # logger.addHandler(fh)
 # #logger.debug(VisualRecord("img_corners", img_corners,"image corners", fmt="png"))
 
-for j in range(1,cam_num+1):
+for j in range(5,cam_num+1):
     # object_points = np.zeros((seq_num*6*4, 3), dtype=np.float32)
     # image_points = np.zeros((seq_num*6*4, 2), dtype=np.float32)
 
@@ -224,29 +224,37 @@ for j in range(1,cam_num+1):
         pattern_features = circular_sampling(img, key_points, rad_circular_sampling)
         result_pattern_features, ret = homography_estimation(img, pattern_features)
 
-        ret2, corners = cv2.findChessboardCorners(img_gray, (4,6))
+        #ret2, corners = cv2.findChessboardCorners(img_gray, (4,6))
 
+        my_corners = []
         idx=0
-        for corner in corners:
-            corner[0][0] = result_pattern_features[idx][0]
-            corner[0][1] = result_pattern_features[idx][1]
+        for rpf in result_pattern_features:
+            #corner[0][0] = result_pattern_features[idx][0]
+            #corner[0][1] = result_pattern_features[idx][1]
+            #print corner
+            #print [[result_pattern_features[idx][0], result_pattern_features[idx][1]]]
+            #corner = [[rpf[0], rpf[1]]]
+            my_corners.append([[rpf[0], rpf[1]]])
             idx = idx+1
+
+        #print my_corners
+        my_corners = np.array(my_corners, dtype=np.float32)
 
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
-        cv2.cornerSubPix(img_gray, corners ,(10,10), (-1,-1), criteria)
+        cv2.cornerSubPix(img_gray, my_corners ,(10,10), (-1,-1), criteria)
         # img_gray = cv2.drawChessboardCorners(img_gray, (4,6), corners,ret)
 
-        idx = 0
-        for corner in corners:
-            cv2.circle(img, (corner[0][0], corner[0][1]), 3, (0,0,255), 3)
-            cv2.putText(img, str(idx),(corner[0][0], corner[0][1]),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255))
-            idx = idx+1
-            #print (corner[0][0], corner[0][1])
+        # idx = 0
+        # for corner in corners:
+        #     cv2.circle(img, (corner[0][0], corner[0][1]), 3, (0,0,255), 3)
+        #     cv2.putText(img, str(idx),(corner[0][0], corner[0][1]),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255))
+        #     idx = idx+1
+        #     #print (corner[0][0], corner[0][1])
 
         #image_points[i*24:(i+1)*24,0:2] = result_pattern_features
         #object_points[i*24:(i+1)*24,0:2] = ret
 
-        image_points.append(corners.reshape(-1, 2))
+        image_points.append(my_corners.reshape(-1, 2))
         object_points.append(pattern_points)
 
         cv2.imwrite("result/cam%d-%02d.bmp" % (j,i), img)
