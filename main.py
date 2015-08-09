@@ -6,13 +6,16 @@ from matplotlib import pyplot as plt
 import math
 
 # Global Parameters
-seq_id = 4
+seq_id = 1
+corner_detect_mode = 'FAST' # FAST, ORB
 param_FAST = 20
-imageSize = (1920,1080); scale_factor = 0.6
+# imageSize = (1920,1080); scale_factor = 0.6; rad_circular_sampling = 20; non_maximum_thresh=50
+imageSize = (1280,720); scale_factor = 0.4; rad_circular_sampling = 10; non_maximum_thresh=50
+cir_num = 3
+draw_mode = {'corner_detect':True, 'my_corners':False, 'Final':True}
 
 cam_num = 5
 seq_num = 10
-rad_circular_sampling = 10
 unit_square_size = 250 # mm
 horizontal_unit_num = 5
 vertical_unit_num = 3
@@ -49,7 +52,7 @@ def circle_check1(img_thresh, _kp, rad):
     lower_bound = 20
     upper_bound = 255-lower_bound
 
-    for m in range(1,3):
+    for m in range(1,cir_num+1):
         for k in range(3,7):
             if cy + rad < img_thresh.shape[0] and cx + rad < img_thresh.shape[1] and cy - rad > 0 and cx - rad > 0:
                  flag = (flag and (img_thresh[cy + (math.sin(math.pi/k)*rad*m)][cx + (math.cos(math.pi/2 - math.pi/k)*rad*m)] < lower_bound)
@@ -69,7 +72,7 @@ def circle_check2(img_thresh, _kp, rad):
     lower_bound = 20
     upper_bound = 255-lower_bound
 
-    for m in range(1,3):
+    for m in range(1,cir_num+1):
         for k in range(3,7):
             if cy + rad < img_thresh.shape[0] and cx + rad < img_thresh.shape[1] and cy - rad > 0 and cx - rad > 0:
                  flag = (flag and (img_thresh[cy + (math.sin(math.pi/k)*rad*m)][cx + (math.cos(math.pi/2 - math.pi/k)*rad*m)] > lower_bound)
@@ -81,10 +84,11 @@ def circle_check2(img_thresh, _kp, rad):
 
 
 def circular_sampling(src_img, kp, rad):
-    img = src_img.copy()
+
     img_gray = cv2.cvtColor(img, cv2.cv.CV_RGB2GRAY)
     ret, img_thresh = cv2.threshold(img_gray,100,255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
-    #cv2.imshow("img_thresh", img_thresh)
+    # cv2.imshow("img_thresh", img_thresh)
+    # cv2.waitKey()
 
     pattern_features = []
     for _kp in kp:
@@ -92,7 +96,9 @@ def circular_sampling(src_img, kp, rad):
         cy = _kp.pt[1]
 
         if cy + rad < img_thresh.shape[0] and cx + rad < img_thresh.shape[1] and cy - rad > 0 and cx - rad > 0:
-            if circle_check1(img_thresh, _kp, rad) or circle_check2(img_thresh, _kp, rad):
+            if circle_check1(img_thresh, _kp, rad):
+                pattern_features.append(_kp)
+            if circle_check2(img_thresh, _kp, rad):
                 pattern_features.append(_kp)
 
     def distance(a,b):
@@ -103,29 +109,26 @@ def circular_sampling(src_img, kp, rad):
 
         return math.sqrt((ax-bx)**2 + (ay-by)**2)
 
-    # non-maximum supression
+    # non-maximum suppression
     new_pattern_features = []
     for pf1 in pattern_features:
         flag = True
         for pf2 in new_pattern_features:
-            if distance(pf1, pf2) < 100:
+            if distance(pf1, pf2) < non_maximum_thresh:
                 flag = False
                 break
 
         if flag:
             new_pattern_features.append(pf1)
 
-    # print pattern_features
-    # for pf in new_pattern_features:
-    #     cv2.circle(img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
+    for pf in new_pattern_features:
+        cv2.circle(img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
     # cv2.imshow("pattern_features", img)
     # cv2.waitKey()
 
     return new_pattern_features
 
 def homography_estimation(src_img, pattern_features):
-    #img = src_img.copy()
-    img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
     ideal_pattern_features = []
     pract_pattern_features = []
@@ -140,11 +143,14 @@ def homography_estimation(src_img, pattern_features):
     ideal_pattern_features = np.array(ideal_pattern_features)
     ret_ideal_pattern_features = ideal_pattern_features
 
-    ideal_pattern_cetner = np.mean(ideal_pattern_features, axis=0)
-    pract_pattern_cetner = np.mean(pract_pattern_features, axis=0)
-
     ideal_pattern_features = np.array(ideal_pattern_features) * scale_factor
     ideal_pattern_features = ideal_pattern_features + (np.mean(pract_pattern_features, axis=0) - np.mean(ideal_pattern_features, axis=0))
+
+    i=0
+    for pf in ideal_pattern_features:
+        cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (0,255,0), 1)
+        cv2.putText(img, str(i),(int(pf[0]), int(pf[1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0))
+        i = i+1
 
     def distance(a,b):
         ax = a[0]
@@ -185,17 +191,18 @@ def homography_estimation(src_img, pattern_features):
     #     cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (0,255,0), 1)
     #     cv2.putText(img, str(i),(int(pf[0]), int(pf[1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0))
     #     i = i+1
-    i=0
-    for pf in pract_pattern_features:
-        cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (255,0,0), 3)
-        cv2.putText(img, str(i),(int(pf[0]), int(pf[1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0))
-        i = i+1
-    # cv2.imshow("pattern_features", img)
+    # i=0
+    # for pf in pract_pattern_features:
+    #     cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (255,0,0), 3)
+    #     cv2.putText(img, str(i),(int(pf[0]), int(pf[1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0))
+    #     i = i+1
 
     return ideal_pattern_features, ret_ideal_pattern_features
 
 
 # main
+rms_dict = dict()
+
 for cam_idx in range(1,cam_num+1):
 
     pattern_size = (4, 6)
@@ -216,13 +223,21 @@ for cam_idx in range(1,cam_num+1):
         img = cv2.imread(file_name)
         img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
-        # Initiate FAST object with default values
-        fast = cv2.FastFeatureDetector(param_FAST)
-        key_points = fast.detect(img,None)
-        # img_corners = cv2.drawKeypoints(img, key_points, color=(255,0,0))
-        # cv2.imshow("img_corners", img_corners)
+        if (corner_detect_mode == 'FAST'):
+            fast = cv2.FastFeatureDetector(param_FAST)
+            kp = fast.detect(img,None)
+            if draw_mode['corner_detect']:
+                img_corners = cv2.drawKeypoints(img, kp, color=(255,0,0))
+                cv2.imwrite('result/fast_result/'+str(cam_idx)+str(seq_idx)+'.png',img_corners)
+        elif (corner_detect_mode == 'ORB'):
+            orb = cv2.ORB()
+            kp = orb.detect(img, None)
+            kp, des = orb.compute(img, kp)
+            if draw_mode['corner_detect']:
+                img_corners = cv2.drawKeypoints(img,kp,color=(0,255,0), flags=0)
+                cv2.imwrite('result/orb_result/'+str(cam_idx)+str(seq_idx)+'.png',img_corners)
 
-        pattern_features = circular_sampling(img, key_points, rad_circular_sampling)
+        pattern_features = circular_sampling(img, kp, rad_circular_sampling)
         result_pattern_features, ret = homography_estimation(img, pattern_features)
 
         my_corners = []
@@ -237,27 +252,40 @@ for cam_idx in range(1,cam_num+1):
         criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
         cv2.cornerSubPix(img_gray, my_corners ,(10,10), (-1,-1), criteria)
 
-        i=0
-        for corner in my_corners:
-            cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (0,0,255), 3)
-            cv2.putText(img, str(i),(int(corner[0][0]), int(corner[0][1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255))
-            i = i+1
+        if draw_mode['my_corners']:
+            i=0
+            for corner in my_corners:
+                cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (0,0,255), 3)
+                cv2.putText(img, str(i),(int(corner[0][0]), int(corner[0][1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255))
+                i = i+1
 
         image_points.append(my_corners.reshape(-1, 2))
         object_points.append(pattern_points)
 
-        cv2.imwrite("result/cam%d-%02d.bmp" % (cam_idx,seq_idx), img)
-        #cv2.waitKey()
+        if draw_mode['Final']:
+            cv2.imwrite("result/final_result/cam%d-%02d.bmp" % (cam_idx,seq_idx), img)
 
     rms,camera_matrix,dist_coefs,rvecs,tvecs = cv2.calibrateCamera(object_points,image_points,imageSize)
     rmat = cv2.Rodrigues(rvecs[seq_num-1])[0]  # must use the last sequence's rotation mat
     tvec = tvecs[seq_num-1]                    # must use the last sequence's translation vec
 
     print "root-mean-square for cam param %d = %f" % (cam_idx, rms)
+    rms_dict[cam_idx] = rms
 
     # cam param save
-    fp=open("result/cam%d_param.txt" % cam_idx, 'w')
+    fp=open("result/cam_param/cam%d_param.txt" % cam_idx, 'w')
     np.savetxt(fp, camera_matrix, fmt='%f'); fp.write("\n")
     np.savetxt(fp, rmat, fmt='%f'); fp.write("\n")
     np.savetxt(fp, tvec, fmt='%f')
     fp.close()
+
+# rms log
+fp_rms = open("result/cam_param/rms_result.txt", 'w')
+fp_rms.write("seq_id : %d\n" % seq_id)
+fp_rms.write("corner_detect_mode : %s\n" % corner_detect_mode)
+fp_rms.write("image size : (%d, %d)\n" % (imageSize[0],imageSize[1]))
+fp_rms.write("scale factor : %f\n" % scale_factor)
+fp_rms.write("radius for circular sampling : %d\n\n" % rad_circular_sampling)
+for rms in rms_dict:
+    fp_rms.write("root-mean-square for cam param %d = %f\n" % (rms, rms_dict[rms]))
+fp_rms.close()
