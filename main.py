@@ -6,10 +6,10 @@ from matplotlib import pyplot as plt
 import math
 
 # Global Parameters
-seq_id = 1
+seq_id = 5
 corner_detect_mode = 'FAST' # FAST, ORB
 param_FAST = 20
-# imageSize = (1920,1080); scale_factor = 0.6; rad_circular_sampling = 20; non_maximum_thresh=50
+#imageSize = (1920,1080); scale_factor = 0.6; rad_circular_sampling = 20; non_maximum_thresh=50
 imageSize = (1280,720); scale_factor = 0.4; rad_circular_sampling = 10; non_maximum_thresh=50
 cir_num = 3
 draw_mode = {'corner_detect':True, 'my_corners':False, 'Final':True}
@@ -121,8 +121,8 @@ def circular_sampling(src_img, kp, rad):
         if flag:
             new_pattern_features.append(pf1)
 
-    for pf in new_pattern_features:
-        cv2.circle(img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
+    # for pf in new_pattern_features:
+    #     cv2.circle(img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
     # cv2.imshow("pattern_features", img)
     # cv2.waitKey()
 
@@ -146,12 +146,6 @@ def homography_estimation(src_img, pattern_features):
     ideal_pattern_features = np.array(ideal_pattern_features) * scale_factor
     ideal_pattern_features = ideal_pattern_features + (np.mean(pract_pattern_features, axis=0) - np.mean(ideal_pattern_features, axis=0))
 
-    i=0
-    for pf in ideal_pattern_features:
-        cv2.circle(img, (int(pf[0]), int(pf[1])), 5, (0,255,0), 1)
-        cv2.putText(img, str(i),(int(pf[0]), int(pf[1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0))
-        i = i+1
-
     def distance(a,b):
         ax = a[0]
         ay = a[1]
@@ -162,22 +156,26 @@ def homography_estimation(src_img, pattern_features):
 
     ideal_pattern_corr = []
     pract_pattern_corr = []
-    dist = np.zeros((len(ideal_pattern_features),1))
 
+    t_ideal_pattern_features = ideal_pattern_features.copy()
     for ppf in pract_pattern_features:
         pract_pattern_corr.append(ppf)
+        dist = np.zeros((len(t_ideal_pattern_features),1))
 
         i=0
-        for ipf in ideal_pattern_features:
+        for ipf in t_ideal_pattern_features:
             dist[i] = distance(ppf, ipf)
             i = i+1
 
-        ideal_pattern_corr.append(ideal_pattern_features[np.argmin(dist)])
-
+        ideal_pattern_corr.append(t_ideal_pattern_features[np.argmin(dist)])
+        t_ideal_pattern_features = np.delete(t_ideal_pattern_features,np.argmin(dist), 0)
 
     ideal_pattern_corr = np.array(ideal_pattern_corr)
     pract_pattern_corr = np.array(pract_pattern_corr)
     H =  cv2.findHomography(ideal_pattern_corr, pract_pattern_corr)[0]
+
+    draw_points(ideal_pattern_corr, (0,0,255))
+    draw_points(pract_pattern_corr, (0,255,0))
 
     ideal_pattern_features = np.append(ideal_pattern_features, np.ones((len(ideal_pattern_features),1)),axis=1)
     ideal_pattern_features = np.dot(H,ideal_pattern_features.T).T
@@ -198,6 +196,14 @@ def homography_estimation(src_img, pattern_features):
     #     i = i+1
 
     return ideal_pattern_features, ret_ideal_pattern_features
+
+
+def draw_points(points, color):
+    i = 0
+    for p in points:
+        cv2.circle(img, (int(p[0]), int(p[1])), 5, color, 1)
+        cv2.putText(img, str(i), (int(p[0]), int(p[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, color)
+        i = i + 1
 
 
 # main
