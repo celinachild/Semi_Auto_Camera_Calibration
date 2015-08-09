@@ -1,26 +1,25 @@
 __author__ = 'DongwonShin'
 
-import numpy as np
-import cv2
-from matplotlib import pyplot as plt
-import math
 from circular_samlping import *
 from homography_estimation import *
 
 # Global Parameters
-seq_id = 5
+seq_id = 5; seq_num = 16
 corner_detect_mode = 'FAST' # FAST, ORB
 param_FAST = 20
-#imageSize = (1920,1080); scale_factor = 0.6; rad_circular_sampling = 20; non_maximum_thresh=50
-imageSize = (1280,720); scale_factor = 0.4; rad_circular_sampling = 10; non_maximum_thresh=50
+#scale_factor = 0.6; rad_circular_sampling = 20; non_maximum_thresh=50
+scale_factor = 0.4; rad_circular_sampling = 10; non_maximum_thresh=50
 cir_num = 3
-draw_mode = {'corner_detect':True, 'my_corners':False, 'Final':True}
-
+draw_mode = {'corner_detect':False, 'my_corners':True, 'Final':True}
 cam_num = 5
-seq_num = 10
+
+imageSize = (1920,1080)
+idx_rearrange = [20,21,22,23,16,17,18,19,12,13,14,15,8,9,10,11,4,5,6,7,0,1,2,3]     # coordinates for GIGA project
 unit_square_size = 250 # mm
 horizontal_unit_num = 5
 vertical_unit_num = 3
+hp_num = horizontal_unit_num+1
+vp_num = vertical_unit_num+1
 input_file_directory = ""
 file_name=""
 
@@ -50,16 +49,18 @@ if __name__ == "__main__":
 
     rms_dict = dict()
 
+    pattern_points = np.zeros( (hp_num*vp_num, 3), np.float32 )
+    for a in range(0,hp_num):
+        for b in range(0,vp_num):
+            pattern_points[a*vp_num+b][0] = a*unit_square_size
+            pattern_points[a*vp_num+b][1] = b*unit_square_size
+            pattern_points[a*vp_num+b][2] = 0
+    pattern_points = pattern_points[idx_rearrange]
+    temp = np.copy(pattern_points[:, 0])
+    pattern_points[:, 0] = pattern_points[:, 1]
+    pattern_points[:, 1] = temp
+
     for cam_idx in range(1,cam_num+1):
-
-        pattern_size = (4, 6)
-        pattern_points = np.zeros( (24, 3), np.float32 )
-
-        for a in range(0,6):
-            for b in range(0,4):
-                pattern_points[a*4+b][0] = a*250
-                pattern_points[a*4+b][1] = b*250
-                pattern_points[a*4+b][2] = 0
 
         object_points = []
         image_points = []
@@ -99,12 +100,16 @@ if __name__ == "__main__":
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
             cv2.cornerSubPix(img_gray, my_corners ,(10,10), (-1,-1), criteria)
 
+            # axis change
+            my_corners = my_corners[idx_rearrange]
+
             if draw_mode['my_corners']:
                 i=0
                 for corner in my_corners:
-                    cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (0,0,255), 3)
-                    cv2.putText(img, str(i),(int(corner[0][0]), int(corner[0][1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,255))
+                    cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (255,0,0), 1)
+                    cv2.putText(img, str(i),(int(corner[0][0]), int(corner[0][1])),cv2.FONT_HERSHEY_SIMPLEX, 1, (255,0,0))
                     i = i+1
+                # draw_points(img,pattern_points,(0,255,0))
 
             image_points.append(my_corners.reshape(-1, 2))
             object_points.append(pattern_points)
@@ -126,7 +131,7 @@ if __name__ == "__main__":
         np.savetxt(fp, tvec, fmt='%f')
         fp.close()
 
-    # rms log
+    # result log
     fp_rms = open("result/cam_param/rms_result.txt", 'w')
     fp_rms.write("seq_id : %d\n" % seq_id)
     fp_rms.write("corner_detect_mode : %s\n" % corner_detect_mode)

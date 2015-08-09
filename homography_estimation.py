@@ -58,8 +58,8 @@ def homography_estimation(src_img, pattern_features, horizontal_unit_num, vertic
     pract_pattern_corr = np.array(pract_pattern_corr)
     H =  cv2.findHomography(ideal_pattern_corr, pract_pattern_corr)[0]
 
-    draw_points(src_img, ideal_pattern_corr, (0,0,255))
-    draw_points(src_img, pract_pattern_corr, (0,255,0))
+    # draw_points(src_img, ideal_pattern_corr, (0,0,255))
+    # draw_points(src_img, pract_pattern_corr, (0,255,0))
 
     ideal_pattern_features = np.append(ideal_pattern_features, np.ones((len(ideal_pattern_features),1)),axis=1)
     ideal_pattern_features = np.dot(H,ideal_pattern_features.T).T
