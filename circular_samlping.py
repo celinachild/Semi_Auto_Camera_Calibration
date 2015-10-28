@@ -14,12 +14,18 @@ def circle_check1(img_thresh, _kp, rad, cir_num):
     upper_bound = 255-lower_bound
 
     for m in range(1,cir_num+1):
-        for k in range(3,7):
-            if cy + rad < img_thresh.shape[0] and cx + rad < img_thresh.shape[1] and cy - rad > 0 and cx - rad > 0:
-                 flag = (flag and (img_thresh[cy + (math.sin(math.pi/k)*rad*m)][cx + (math.cos(math.pi/2 - math.pi/k)*rad*m)] < lower_bound)
-                              and (img_thresh[cy - (math.sin(math.pi/k)*rad*m)][cx - (math.cos(math.pi/2 - math.pi/k)*rad*m)] < lower_bound)
-                              and (img_thresh[cy + (math.sin(math.pi/k)*rad*m)][cx - (math.cos(math.pi/2 - math.pi/k)*rad*m)] > upper_bound)
-                              and (img_thresh[cy - (math.sin(math.pi/k)*rad*m)][cx + (math.cos(math.pi/2 - math.pi/k)*rad*m)] > upper_bound))
+        for deg in range(30,60,10):
+            ay = cy + (math.sin(math.radians(deg))*rad*m)
+            ax = cx + (math.cos(math.radians(90-deg))*rad*m)
+            by = cy - (math.sin(math.radians(deg))*rad*m)
+            bx = cx - (math.cos(math.radians(90-deg))*rad*m)
+            if ay < img_thresh.shape[0] and ax < img_thresh.shape[1] and by > 0 and bx > 0:
+                 flag = (flag and (img_thresh[cy + (math.sin(math.radians(deg))*rad*m)][cx + (math.cos(math.radians(90-deg))*rad*m)] < lower_bound)
+                              and (img_thresh[cy - (math.sin(math.radians(deg))*rad*m)][cx - (math.cos(math.radians(90-deg))*rad*m)] < lower_bound)
+                              and (img_thresh[cy + (math.sin(math.radians(deg))*rad*m)][cx - (math.cos(math.radians(90-deg))*rad*m)] > upper_bound)
+                              and (img_thresh[cy - (math.sin(math.radians(deg))*rad*m)][cx + (math.cos(math.radians(90-deg))*rad*m)] > upper_bound))
+            else:
+                flag = False
 
     return flag
 
@@ -34,20 +40,27 @@ def circle_check2(img_thresh, _kp, rad, cir_num):
     upper_bound = 255-lower_bound
 
     for m in range(1,cir_num+1):
-        for k in range(3,7):
-            if cy + rad < img_thresh.shape[0] and cx + rad < img_thresh.shape[1] and cy - rad > 0 and cx - rad > 0:
-                 flag = (flag and (img_thresh[cy + (math.sin(math.pi/k)*rad*m)][cx + (math.cos(math.pi/2 - math.pi/k)*rad*m)] > lower_bound)
-                              and (img_thresh[cy - (math.sin(math.pi/k)*rad*m)][cx - (math.cos(math.pi/2 - math.pi/k)*rad*m)] > lower_bound)
-                              and (img_thresh[cy + (math.sin(math.pi/k)*rad*m)][cx - (math.cos(math.pi/2 - math.pi/k)*rad*m)] < upper_bound)
-                              and (img_thresh[cy - (math.sin(math.pi/k)*rad*m)][cx + (math.cos(math.pi/2 - math.pi/k)*rad*m)] < upper_bound))
+        for deg in range(30,60,10):
+            ay = cy + (math.sin(math.radians(deg))*rad*m)
+            ax = cx + (math.cos(math.radians(90-deg))*rad*m)
+            by = cy - (math.sin(math.radians(deg))*rad*m)
+            bx = cx - (math.cos(math.radians(90-deg))*rad*m)
+            if ay < img_thresh.shape[0] and ax < img_thresh.shape[1] and by > 0 and bx > 0:
+                 flag = (flag and (img_thresh[cy + (math.sin(math.radians(deg))*rad*m)][cx + (math.cos(math.radians(90-deg))*rad*m)] > lower_bound)
+                              and (img_thresh[cy - (math.sin(math.radians(deg))*rad*m)][cx - (math.cos(math.radians(90-deg))*rad*m)] > lower_bound)
+                              and (img_thresh[cy + (math.sin(math.radians(deg))*rad*m)][cx - (math.cos(math.radians(90-deg))*rad*m)] < upper_bound)
+                              and (img_thresh[cy - (math.sin(math.radians(deg))*rad*m)][cx + (math.cos(math.radians(90-deg))*rad*m)] < upper_bound))
+            else:
+                flag = False
 
     return flag
 
 
-def circular_sampling(img, kp, rad, cir_num, non_maximum_thresh):
+def circular_sampling(img, kp, rad, cir_num, non_maximum_thresh,cam_idx, seq_idx,circular_results,prefix):
 
     img_gray = cv2.cvtColor(img, cv2.cv.CV_RGB2GRAY)
-    ret, img_thresh = cv2.threshold(img_gray,100,255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    ret, img_thresh = cv2.threshold(img_gray,150,255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)
+    # cv2.adaptiveThreshold(img_gray,100,)
     # cv2.imshow("img_thresh", img_thresh)
     # cv2.waitKey()
 
@@ -82,9 +95,12 @@ def circular_sampling(img, kp, rad, cir_num, non_maximum_thresh):
         if flag:
             new_pattern_features.append(pf1)
 
-    # for pf in new_pattern_features:
-    #     cv2.circle(img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
-    # cv2.imshow("pattern_features", img)
-    # cv2.waitKey()
+    if circular_results == True:
+        tmp_img = img.copy()
+        for pf in new_pattern_features:
+           cv2.circle(tmp_img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
+        # cv2.imshow("pattern_features", tmp_img)
+        cv2.imwrite("result/circular_sampling/%s_%d%02d.bmp" % (prefix,cam_idx,seq_idx), tmp_img)
+        # cv2.waitKey()
 
     return new_pattern_features
