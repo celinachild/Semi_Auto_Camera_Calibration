@@ -100,7 +100,7 @@ def circular_sampling(img, kp, rad, cir_num, non_maximum_thresh,cam_idx, seq_idx
         for pf in new_pattern_features:
            cv2.circle(tmp_img, (int(pf.pt[0]), int(pf.pt[1])), 5, (0,0,255), 3)
         # cv2.imshow("pattern_features", tmp_img)
-        cv2.imwrite("result/circular_sampling/%s_%d%02d.bmp" % (prefix,cam_idx,seq_idx), tmp_img)
+        cv2.imwrite("../result/circular_sampling/%s_%d%02d.bmp" % (prefix,cam_idx,seq_idx), tmp_img)
         # cv2.waitKey()
 
     return new_pattern_features
