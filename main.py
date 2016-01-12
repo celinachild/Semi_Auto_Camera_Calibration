@@ -10,24 +10,15 @@ import shutil
 draw_mode = {}
 axis_change_flag = True
 idx_rearrange = [20,21,22,23,16,17,18,19,12,13,14,15,8,9,10,11,4,5,6,7,0,1,2,3]     # coordinates for GIGA project 3*5 pattern
-# idx_rearrange = [48,49,50,51,52,53,42,43,44,45,46,47,36,37,38,39,40,41,30,31,32,33,34,35,24,25,26,27,28,29,18,19,20,21,22,23,12,13,14,15,16,17,6,7,8,9,10,11,0,1,2,3,4,5]     # coordinates for GIGA project 3*5 pattern
 input_file_directory = ""
 file_name=""
-
-color_prefix = "color"
-depth_prefix = "depth_confidence"
-file_ext = "png"
-cam_start_number = 1
-seq_start_number = 0
-missing_flag = True
-missing_idxs = [8]
 
 def color_sequence_setting(seq):
     global input_file_directory
     global file_name
 
     input_file_directory = "../seq/%d" % seq_id
-    file_name = "%s/color%d/%s%d_%d.png" % (input_file_directory, cam_idx, color_prefix, cam_idx-1, seq_idx)
+    file_name = "%s/color%d/%s%d_%d.%s" % (input_file_directory, cam_idx, color_prefix, cam_idx, seq_idx, color_file_ext)
     # file_name = "%s/cam%d/%s_%d.%s" % (input_file_directory, cam_idx, color_prefix, seq_idx, file_ext)
 
 def tof_sequence_setting(seq):
@@ -35,7 +26,7 @@ def tof_sequence_setting(seq):
     global file_name
 
     input_file_directory = "../seq/%d" % seq_id
-    file_name = "%s/tof%d/%s_%d.png" % (input_file_directory, cam_idx, depth_prefix, seq_idx)
+    file_name = "%s/tof%d/%s%d_C%d.%s" % (input_file_directory, cam_idx, depth_prefix,cam_idx, seq_idx, depth_file_ext)
 
 
 def Calibration_For_Color_Cam():
@@ -74,7 +65,7 @@ def Calibration_For_Color_Cam():
 
             fast = cv2.FastFeatureDetector(param_FAST)
             kp = fast.detect(img, None)
-            if draw_mode['corner_detect']:
+            if draw_mode['fast_results']:
                 img_corners = cv2.drawKeypoints(img, kp, color=(0, 0, 255))
                 cv2.imwrite('../result/fast_result/color_%d%02d.bmp' % (cam_idx, seq_idx), img_corners)
 
@@ -102,33 +93,32 @@ def Calibration_For_Color_Cam():
             if axis_change_flag == True:
                 my_corners = my_corners[idx_rearrange]
 
-            if draw_mode['my_corners']:
+            image_points.append(my_corners.reshape(-1, 2))
+            object_points.append(pattern_points)
 
+            if draw_mode['final_results']:
                 for i, corner in enumerate(my_corners):
                     cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (0, 0, 255), 3)
                     cv2.putText(img, str(i), (int(corner[0][0]), int(corner[0][1])), cv2.FONT_HERSHEY_SIMPLEX, 1,
                                 (0, 0, 255))
 
-                    # draw_points2(img,my_corners,(0,255,0))
-
-            image_points.append(my_corners.reshape(-1, 2))
-            object_points.append(pattern_points)
-
-            if draw_mode['final_results']:
                 cv2.imwrite("../result/final_result/color_%d%02d.bmp" % (cam_idx, seq_idx), img)
 
-            fp = open("../result/object_points/color_%d_%d.txt" % (cam_idx, seq_idx), 'w')
-            for my_corner in my_corners:
-                fp.write('%f\t%f' % (my_corner[0][0],my_corner[0][1]))
-                fp.write('\n')
-            fp.close()
+            # fp = open("../result/object_points/color_%d_%d.txt" % (cam_idx, seq_idx), 'w')
+            # for my_corner in my_corners:
+            #     fp.write('%f\t%f' % (my_corner[0][0],my_corner[0][1]))
+            #     fp.write('\n')
+            # fp.close()
 
 
         rms, camera_matrix, dist_coefs, rvecs, tvecs = cv2.calibrateCamera(object_points, image_points, (img.shape[1],img.shape[0]))
         rmat = cv2.Rodrigues(rvecs[len(rvecs)-1])[0]  # must use the last sequence's rotation mat
         tvec = tvecs[len(rvecs)-1]  # must use the last sequence's translation vec
 
-        print "root-mean-square for cam param %d = %f" % (cam_idx, rms)
+        if rms > 0.5:
+            print "root-mean-square for color param %d = %f <---- please check" % (cam_idx, rms)
+        else:
+            print "root-mean-square for color param %d = %f" % (cam_idx, rms)
         rms_dict[cam_idx] = rms
 
         # cam param save
@@ -138,6 +128,17 @@ def Calibration_For_Color_Cam():
         np.savetxt(fp, rmat, fmt='%.11f');
         fp.write("\n")
         np.savetxt(fp, tvec, fmt='%.11f')
+        fp.close()
+
+        # cam param integration
+        fp = open("../result/cam_param/cam_param.txt", 'a')
+        fp.write("param_cam%d\n" % (cam_idx+1))
+        np.savetxt(fp, camera_matrix, fmt='%.11f');
+        fp.write("\n")
+        np.savetxt(fp, rmat, fmt='%.11f');
+        fp.write("\n")
+        np.savetxt(fp, tvec, fmt='%.11f')
+        fp.write("\n")
         fp.close()
 
     # result log
@@ -194,7 +195,7 @@ def Calibration_For_Tof_Cam():
 
             fast = cv2.FastFeatureDetector(param_FAST)
             kp = fast.detect(img, None)
-            if draw_mode['corner_detect']:
+            if draw_mode['fast_results']:
                 img_corners = cv2.drawKeypoints(img, kp, color=(255, 0, 0))
                 cv2.imwrite('../result/fast_result/tof_%d%02d.bmp' % (cam_idx, seq_idx), img_corners)
 
@@ -220,26 +221,21 @@ def Calibration_For_Tof_Cam():
             if axis_change_flag == True:
                 my_corners = my_corners[idx_rearrange]
 
-            if draw_mode['my_corners']:
-
-                for i, corner in enumerate(my_corners):
-                    cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (255, 0, 0), 1)
-                    # cv2.putText(img, str(i), (int(corner[0][0]), int(corner[0][1])), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
-                    #             (255, 0, 0))
-
-                    # draw_points2(img,my_corners,(0,255,0))
-
             image_points.append(my_corners.reshape(-1, 2))
             object_points.append(pattern_points)
 
             if draw_mode['final_results']:
+
+                for i, corner in enumerate(my_corners):
+                    cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (255, 0, 0), 1)
+
                 cv2.imwrite("../result/final_result/tof_%d%02d.bmp" % (cam_idx, seq_idx), img)
 
-            fp = open("../result/object_points/tof_%d_%d.txt" % (cam_idx, seq_idx), 'w')
-            for my_corner in my_corners:
-                fp.write('%f\t%f' % (my_corner[0][0],my_corner[0][1]))
-                fp.write('\n')
-            fp.close()
+            # fp = open("../result/object_points/tof_%d_%d.txt" % (cam_idx, seq_idx), 'w')
+            # for my_corner in my_corners:
+            #     fp.write('%f\t%f' % (my_corner[0][0],my_corner[0][1]))
+            #     fp.write('\n')
+            # fp.close()
 
 
         rms, camera_matrix, dist_coefs, rvecs, tvecs = cv2.calibrateCamera(object_points, image_points, (img.shape[1],img.shape[0]))
@@ -259,7 +255,11 @@ def Calibration_For_Tof_Cam():
                 cv2.undistort(img, camera_matrix, dist_coefs, undistort_img)
                 cv2.imwrite("../result/undistort/tof_%d%d.bmp" % (cam_idx, seq_idx), undistort_img)
 
-        print "root-mean-square for tof param %d = %f" % (cam_idx, rms)
+
+        if rms > 0.5:
+            print "root-mean-square for tof param %d = %f <---- please check" % (cam_idx, rms)
+        else:
+            print "root-mean-square for tof param %d = %f" % (cam_idx, rms)
         rms_dict[cam_idx] = rms
 
         # cam param save
@@ -273,6 +273,20 @@ def Calibration_For_Tof_Cam():
         fp.write("%.11f %.11f %.11f" % (dist_coefs[0][0],dist_coefs[0][1],dist_coefs[0][4]))
         fp.write("\n")
         fp.close()
+
+        # cam param integration
+        fp = open("../result/cam_param/tof_param.txt", 'a')
+        fp.write("param_tof%d\n" % (cam_idx+1))
+        np.savetxt(fp, camera_matrix, fmt='%.11f');
+        fp.write("\n")
+        np.savetxt(fp, rmat, fmt='%.11f');
+        fp.write("\n")
+        np.savetxt(fp, tvec, fmt='%.11f')
+        fp.write("\n")
+        fp.write("%.11f %.11f %.11f" % (dist_coefs[0][0],dist_coefs[0][1],dist_coefs[0][4]))
+        fp.write("\n\n")
+        fp.close()
+
 
     # result log
     fp_rms = open("../result/cam_param/tof_rms_result.txt", 'w')
@@ -301,11 +315,17 @@ def Make_Ideal_Pattern():
 
 
 def Dictionary_Setting():
-    shutil.rmtree('../result/cam_param')
-    shutil.rmtree('../result/circular_sampling')
-    shutil.rmtree('../result/fast_result')
-    shutil.rmtree('../result/final_result')
-    shutil.rmtree('../result/undistort')
+
+    if os.access('../result/cam_param', os.F_OK):
+        shutil.rmtree('../result/cam_param')
+    if os.access('../result/circular_sampling', os.F_OK):
+        shutil.rmtree('../result/circular_sampling')
+    if os.access('../result/fast_result', os.F_OK):
+        shutil.rmtree('../result/fast_result')
+    if os.access('../result/final_result', os.F_OK):
+        shutil.rmtree('../result/final_result')
+    if os.access('../result/undistort', os.F_OK):
+        shutil.rmtree('../result/undistort')
 
     if not os.access('../result', os.F_OK):
         os.mkdir('../result')
@@ -322,22 +342,37 @@ def Dictionary_Setting():
 
 
 def Read_From_Configure_File():
-    global config, seq_id, seq_num, unit_square_size, horizontal_unit_num, vertical_unit_num, hp_num, vp_num
+    global config, seq_id, seq_num, color_prefix, depth_prefix, cam_start_number, seq_start_number, missing_flag, missing_idxs, \
+        color_file_ext, depth_file_ext, unit_square_size, horizontal_unit_num, vertical_unit_num, hp_num, vp_num
     config = ConfigParser.RawConfigParser()
     config.read('../seq/config.cfg')
     seq_id = config.getint('Sequence_info', 'seq_id')
     seq_num = config.getint('Sequence_info', 'seq_num')
+    color_prefix = config.get('Sequence_info','color_prefix')
+    depth_prefix = config.get('Sequence_info','depth_prefix')
+    color_file_ext = config.get('Sequence_info','color_file_ext')
+    depth_file_ext = config.get('Sequence_info','depth_file_ext')
+    cam_start_number = config.getint('Sequence_info', 'cam_start_number')
+    seq_start_number = config.getint('Sequence_info', 'seq_start_number')
+    missing_flag = config.getboolean('Sequence_info', 'missing_flag')
+    if missing_flag == True:
+        missing_idxs_str = config.get('Sequence_info', 'missing_idxs')
+        missing_idxs_str = missing_idxs_str.split(',')
+        missing_idxs = []
+        for i in range(len(missing_idxs_str)):
+            missing_idxs.append(int(missing_idxs_str[i]))
+    else:
+        missing_idxs = []
+
     unit_square_size = config.getint('Calibration_Pattern_info', 'unit_square_size')
     horizontal_unit_num = config.getint('Calibration_Pattern_info', 'horizontal_unit_num')
     vertical_unit_num = config.getint('Calibration_Pattern_info', 'vertical_unit_num')
     hp_num = horizontal_unit_num + 1
     vp_num = vertical_unit_num + 1
-    draw_mode['corner_detect'] = config.getboolean('Draw_mode', 'corner_detect')
-    draw_mode['my_corners'] = config.getboolean('Draw_mode', 'my_corners')
+    draw_mode['fast_results'] = config.getboolean('Draw_mode', 'fast_results')
     draw_mode['final_results'] = config.getboolean('Draw_mode', 'final_results')
     draw_mode['undistorted_results'] = config.getboolean('Draw_mode', 'undistorted_results')
     draw_mode['circular_results'] = config.getboolean('Draw_mode', 'circular_results')
-    draw_mode['homography_results'] = config.getboolean('Draw_mode', 'homography_results')
 
 # main
 if __name__ == "__main__":
