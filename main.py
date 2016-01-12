@@ -18,7 +18,8 @@ def color_sequence_setting(seq):
     global file_name
 
     input_file_directory = "../seq/%d" % seq_id
-    file_name = "%s/color%d/%s%d_%d.%s" % (input_file_directory, cam_idx, color_prefix, cam_idx, seq_idx, color_file_ext)
+    file_name = "%s/cam%d/%s%d_%d.%s" % (input_file_directory, cam_idx, color_prefix, cam_idx, seq_idx, color_file_ext)
+    # print file_name
     # file_name = "%s/cam%d/%s_%d.%s" % (input_file_directory, cam_idx, color_prefix, seq_idx, file_ext)
 
 def tof_sequence_setting(seq):
@@ -27,7 +28,7 @@ def tof_sequence_setting(seq):
 
     input_file_directory = "../seq/%d" % seq_id
     file_name = "%s/tof%d/%s%d_C%d.%s" % (input_file_directory, cam_idx, depth_prefix,cam_idx, seq_idx, depth_file_ext)
-
+    # print file_name
 
 def Calibration_For_Color_Cam():
     global param_FAST, scale_factor, rad_circular_sampling, non_maximum_thresh, cir_num, cam_num, imageSize, cam_idx, object_points, image_points, seq_idx, img, img_gray, fast, kp, img_corners, pattern_features, result_pattern_features, H, ret, my_corners, idx, rpf, criteria, i, corner, rms, camera_matrix, dist_coefs, rvecs, tvecs, rmat, tvec, fp, fp_rms
@@ -63,8 +64,10 @@ def Calibration_For_Color_Cam():
             img = cv2.imread(file_name)
             img_gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
-            fast = cv2.FastFeatureDetector(param_FAST)
+            fast = cv2.FastFeatureDetector(param_FAST,True)
+
             kp = fast.detect(img, None)
+            print len(kp)
             if draw_mode['fast_results']:
                 img_corners = cv2.drawKeypoints(img, kp, color=(0, 0, 255))
                 cv2.imwrite('../result/fast_result/color_%d%02d.bmp' % (cam_idx, seq_idx), img_corners)
