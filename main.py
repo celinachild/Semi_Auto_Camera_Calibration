@@ -18,7 +18,11 @@ def color_sequence_setting(seq):
     global file_name
 
     input_file_directory = "../seq/%d" % seq_id
-    file_name = "%s/cam%d/%s%d_%d.%s" % (input_file_directory, cam_idx, color_prefix, cam_idx, seq_idx, color_file_ext)
+    # several types of name
+    file_name = "%s/color%d/%s%d_%d.%s" % (input_file_directory, cam_idx, color_prefix, cam_idx, seq_idx, color_file_ext)
+    #file_name = "%s/CAM %02d/CAM_%02d_%02d.%s" % (input_file_directory, cam_idx, cam_idx, seq_idx, color_file_ext)
+    # file_name = "%s/cam%d/%s%d_%d.%s" % (input_file_directory, cam_idx, color_prefix, cam_idx, seq_idx, color_file_ext)
+
     # print file_name
     # file_name = "%s/cam%d/%s_%d.%s" % (input_file_directory, cam_idx, color_prefix, seq_idx, file_ext)
 
@@ -27,8 +31,8 @@ def tof_sequence_setting(seq):
     global file_name
 
     input_file_directory = "../seq/%d" % seq_id
-    file_name = "%s/tof%d/%s%d_C%d.%s" % (input_file_directory, cam_idx, depth_prefix,cam_idx, seq_idx, depth_file_ext)
-    # print file_name
+    file_name = "%s/tof%d/%s%d_%d.%s" % (input_file_directory, cam_idx, depth_prefix,cam_idx, seq_idx, depth_file_ext)
+    # file_name = "%s/tof%d/%s_%d.%s" % (input_file_directory, cam_idx, depth_prefix, seq_idx, depth_file_ext)
 
 def Calibration_For_Color_Cam():
     global param_FAST, scale_factor, rad_circular_sampling, non_maximum_thresh, cir_num, cam_num, imageSize, cam_idx, object_points, image_points, seq_idx, img, img_gray, fast, kp, img_corners, pattern_features, result_pattern_features, H, ret, my_corners, idx, rpf, criteria, i, corner, rms, camera_matrix, dist_coefs, rvecs, tvecs, rmat, tvec, fp, fp_rms
@@ -67,41 +71,50 @@ def Calibration_For_Color_Cam():
             fast = cv2.FastFeatureDetector(param_FAST,True)
 
             kp = fast.detect(img, None)
-            print len(kp)
+            # print len(kp)
             if draw_mode['fast_results']:
                 img_corners = cv2.drawKeypoints(img, kp, color=(0, 0, 255))
                 cv2.imwrite('../result/fast_result/color_%d%02d.bmp' % (cam_idx, seq_idx), img_corners)
 
             pattern_features = circular_sampling(img, kp, rad_circular_sampling, cir_num, non_maximum_thresh, cam_idx,
                                                  seq_idx, draw_mode['circular_results'], 'color')
-            # print len(pattern_features)
-            result_pattern_features, H, ret = homography_estimation(img, pattern_features, horizontal_unit_num,
+
+            if True: #len(pattern_features) != vp_num * hp_num:
+                result_pattern_features, H, ret = homography_estimation(img, pattern_features, horizontal_unit_num,
                                                                     vertical_unit_num, unit_square_size, scale_factor)
+                homographys.append(H)
 
-            homographys.append(H)
+                my_corners = []
+                for rpf in result_pattern_features:
+                    my_corners.append([[rpf[0], rpf[1]]])
+            # else:
+            #     my_corners = []
+            #     for pf in pattern_features:
+            #         my_corners.append([[pf.pt[0], pf.pt[1]]])
+            #
+            #     def by_Yaxis(pt): return pt[0][1]
+            #
+            #     my_corners.sort(reverse=True)
+            #     for i in range(hp_num):
+            #         tmp = my_corners[i*vp_num:(i+1)*vp_num]
+            #         tmp.sort(key=by_Yaxis)
+            #         my_corners[i*vp_num:(i+1)*vp_num] = tmp
+            #         #print my_corners[i*4:(i+1)*4]
 
-            my_corners = []
-            idx = 0
-            for rpf in result_pattern_features:
-                my_corners.append([[rpf[0], rpf[1]]])
-                idx = idx + 1
-
-            # print my_corners
             my_corners = np.array(my_corners, dtype=np.float32)
 
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.001)
             cv2.cornerSubPix(img_gray, my_corners, (15, 15), (-1, -1), criteria)
 
             # axis change
-            if axis_change_flag == True:
-                my_corners = my_corners[idx_rearrange]
+            if axis_change_flag == True: my_corners = my_corners[idx_rearrange]
 
             image_points.append(my_corners.reshape(-1, 2))
             object_points.append(pattern_points)
 
             if draw_mode['final_results']:
                 for i, corner in enumerate(my_corners):
-                    cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (0, 0, 255), 3)
+                    cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 10, (0, 0, 255), 3)
                     cv2.putText(img, str(i), (int(corner[0][0]), int(corner[0][1])), cv2.FONT_HERSHEY_SIMPLEX, 1,
                                 (0, 0, 255))
 
@@ -193,7 +206,7 @@ def Calibration_For_Tof_Cam():
             # edges = inverte(edges)
             # img = img_thre + edges
 
-            # cv2.imshow("img_thre", img_thre)
+            # cv2.imshow("img_gray", img_gray)
             # cv2.waitKey()
 
             fast = cv2.FastFeatureDetector(param_FAST)
@@ -230,7 +243,7 @@ def Calibration_For_Tof_Cam():
             if draw_mode['final_results']:
 
                 for i, corner in enumerate(my_corners):
-                    cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (255, 0, 0), 1)
+                    cv2.circle(img, (int(corner[0][0]), int(corner[0][1])), 5, (255, 0, 0), 3)
 
                 cv2.imwrite("../result/final_result/tof_%d%02d.bmp" % (cam_idx, seq_idx), img)
 
@@ -376,6 +389,7 @@ def Read_From_Configure_File():
     draw_mode['final_results'] = config.getboolean('Draw_mode', 'final_results')
     draw_mode['undistorted_results'] = config.getboolean('Draw_mode', 'undistorted_results')
     draw_mode['circular_results'] = config.getboolean('Draw_mode', 'circular_results')
+
 
 # main
 if __name__ == "__main__":

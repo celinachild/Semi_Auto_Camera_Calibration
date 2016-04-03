@@ -9,7 +9,7 @@ def draw_points(img, points, color):
 
     for i, p in enumerate(points):
         cv2.circle(img, (int(p[0]), int(p[1])), 5, color, 3)
-        cv2.putText(img, str(i), (int(p[0]), int(p[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, color)
+        # cv2.putText(img, str(i), (int(p[0]), int(p[1])), cv2.FONT_HERSHEY_SIMPLEX, 1, color)
 
 def draw_points2(img, points, color):
 
